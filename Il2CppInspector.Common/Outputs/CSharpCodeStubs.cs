@@ -150,7 +150,7 @@ namespace Il2CppInspector.Outputs
                     .Distinct();
                 var dependencyAssemblies = dependencyTypes.Select(t => t.Assembly).Distinct()
                     .Except(new[] {asm});
-                
+
                 // Only create project references to those assemblies actually output in our solution
                 dependencyAssemblies = dependencyAssemblies.Intersect(assemblies);
 
@@ -263,7 +263,7 @@ namespace Il2CppInspector.Outputs
                 // Append namespace
                 if (!useNamespaceSyntax)
                     code.Append($"// Namespace: {(!string.IsNullOrEmpty(type.Namespace) ? type.Namespace : "<global namespace>")}\n");
-                
+
                 // Append type definition
                 code.Append(text);
                 code.Append("\n");
@@ -279,7 +279,7 @@ namespace Il2CppInspector.Outputs
             // Close namespace
             if (useNamespaceSyntax && !string.IsNullOrEmpty(nsContext))
                 code.Remove(code.Length - 1, 1).Append("}\n");
-            
+
             // Determine using directives (put System namespaces first)
             nsRefs.Clear();
             foreach (var type in usedTypes) {
@@ -314,20 +314,13 @@ namespace Il2CppInspector.Outputs
                 try {
                     using StreamWriter writer = new StreamWriter(new FileStream(outFile, FileMode.Create), Encoding.UTF8);
 
-                    // Write preamble
-                    writer.Write(@"/*
- * Generated code file by Il2CppInspector - http://www.djkaty.com - https://github.com/djkaty
- */
-
-");
+                    // Output assembly information and attributes
+                    writer.Write(generateAssemblyInfo(assemblies, nsRefs, outputAssemblyAttributes) + "\n\n");
 
                     // Output using directives
                     writer.Write(string.Concat(usings.Select(n => $"using {n};\n")));
                     if (nsRefs.Any())
                         writer.Write("\n");
-
-                    // Output assembly information and attributes
-                    writer.Write(generateAssemblyInfo(assemblies, nsRefs, outputAssemblyAttributes) + "\n\n");
 
                     // Output type definitions
                     writer.Write(code);
@@ -351,30 +344,17 @@ namespace Il2CppInspector.Outputs
             var text = new StringBuilder();
 
             foreach (var asm in assemblies) {
-                text.Append($"// Image {asm.Index}: {asm.ShortName} - Assembly: {asm.FullName}");
+                text.Append($"// {asm.ShortName}");
                 if (!SuppressMetadata)
                     text.Append($" - Types {asm.ImageDefinition.typeStart}-{asm.ImageDefinition.typeStart + asm.ImageDefinition.typeCount - 1}");
                 text.AppendLine();
-
-                // Assembly-level attributes
-                if (outputAssemblyAttributes)
-                    lock (usedAssemblyAttributesLock) {
-                        text.Append(asm.CustomAttributes.Where(a => a.AttributeType.FullName != ExtAttribute)
-                            .Except(usedAssemblyAttributes ?? new HashSet<CustomAttributeData>())
-                            .OrderBy(a => a.AttributeType.Name)
-                            .ToString(new Scope { Current = null, Namespaces = namespaces ?? new List<string>() }, attributePrefix: "assembly: ", emitPointer: !SuppressMetadata, mustCompile: MustCompile));
-                        if (asm.CustomAttributes.Any())
-                            text.Append("\n");
-
-                        usedAssemblyAttributes.UnionWith(asm.CustomAttributes);
-                    }
             }
             return text.ToString().TrimEnd();
         }
 
         private StringBuilder generateType(TypeInfo type, IEnumerable<string> namespaces, string prefix = "") {
             // Don't output compiler-generated types if desired
-            if (MustCompile && type.GetCustomAttributes(CGAttribute).Any())
+            if (type.GetCustomAttributes(CGAttribute).Any())
                 return new StringBuilder();
 
             var codeBlocks = new Dictionary<string, StringBuilder>();
@@ -390,7 +370,7 @@ namespace Il2CppInspector.Outputs
             sb = new StringBuilder();
             if (!type.IsEnum) {
                 foreach (var field in type.DeclaredFields) {
-                    if (MustCompile && field.GetCustomAttributes(CGAttribute).Any())
+                    if (field.GetCustomAttributes(CGAttribute).Any())
                         continue;
 
                     if (field.IsNotSerialized)
@@ -456,7 +436,7 @@ namespace Il2CppInspector.Outputs
                 var setBody = needsBody? " {}" : ";";
                 if ((!prop.CanRead || !prop.GetMethod.DeclaredParameters.Any()) && (!prop.CanWrite || prop.SetMethod.DeclaredParameters.Count == 1))
                     sb.Append($"{prop.CSharpName} {{ ");
-                
+
                 // Indexer
                 else {
                     // Replace indexer name (usually "Item" but not always) with "this" - preserves explicit interface implementations
@@ -469,13 +449,13 @@ namespace Il2CppInspector.Outputs
                     hasIndexer = true;
                 }
 
-                sb.Append((prop.CanRead? prop.GetMethod.CustomAttributes.Where(a => !MustCompile || a.AttributeType.FullName != CGAttribute)
-                                             .ToString(scope, inline: true, emitPointer: !SuppressMetadata, mustCompile: MustCompile) 
+                sb.Append((prop.CanRead? prop.GetMethod.CustomAttributes.Where(a => a.AttributeType.FullName != CGAttribute)
+                                             .ToString(scope, inline: true, emitPointer: !SuppressMetadata, mustCompile: MustCompile)
                                                + (getAccess < setAccess? prop.GetMethod.GetAccessModifierString() : "") + $"get{getBody} " : "")
                              // Auto-properties must have get accessors (exclude indexers)
                              + (MustCompile && !prop.CanRead && setBody == ";"? "get; " : "")
-                             + (prop.CanWrite? prop.SetMethod.CustomAttributes.Where(a => !MustCompile || a.AttributeType.FullName != CGAttribute)
-                                                   .ToString(scope, inline: true, emitPointer: !SuppressMetadata, mustCompile: MustCompile) 
+                             + (prop.CanWrite? prop.SetMethod.CustomAttributes.Where(a => a.AttributeType.FullName != CGAttribute)
+                                                   .ToString(scope, inline: true, emitPointer: !SuppressMetadata, mustCompile: MustCompile)
                                                + (setAccess < getAccess? prop.SetMethod.GetAccessModifierString() : "") + $"set{setBody} " : "") + "}");
                 if (!SuppressMetadata) {
                     if ((prop.CanRead && prop.GetMethod.VirtualAddress != null) || (prop.CanWrite && prop.SetMethod.VirtualAddress != null))
@@ -499,7 +479,7 @@ namespace Il2CppInspector.Outputs
 
                 string modifiers = evt.AddMethod?.GetModifierString();
                 sb.Append($"{prefix}\t{modifiers}event {evt.EventHandlerType.GetScopedCSharpName(scope)} {evt.CSharpName}");
-                
+
                 if (!MustCompile) {
                     sb.Append(" {\n");
                     var m = new Dictionary<string, (ulong, ulong)?>();
@@ -577,7 +557,7 @@ namespace Il2CppInspector.Outputs
 
             usedMethods.AddRange(methods);
 
-            // Extension methods 
+            // Extension methods
             codeBlocks.Add("Extension methods", type.DeclaredMethods.Except(usedMethods)
                 .Select(m => generateMethod(m, scope, prefix))
                 .Aggregate(new StringBuilder(), (r, i) => r.Append(i)));
@@ -643,7 +623,7 @@ namespace Il2CppInspector.Outputs
 
             // Type definition
             else
-                sb.AppendJoin("\n", codeBlocks.Where(b => b.Value.Length > 0).Select(b => prefix + "\t// " + b.Key + "\n" + b.Value));
+                sb.AppendJoin("\n", codeBlocks.Where(b => b.Value.Length > 0).Select(b => b.Value));
 
             sb.Append(prefix + "}\n");
             return sb;
@@ -652,7 +632,7 @@ namespace Il2CppInspector.Outputs
         private StringBuilder generateMethod(MethodInfo method, Scope scope, string prefix) {
             var writer = new StringBuilder();
 
-            if (MustCompile && method.GetCustomAttributes(CGAttribute).Any())
+            if (method.GetCustomAttributes(CGAttribute).Any())
                 return writer;
 
             // Attributes
@@ -667,7 +647,7 @@ namespace Il2CppInspector.Outputs
             // Finalizers become destructors
             if (method.Name == "Finalize" && method.IsVirtual && method.ReturnType.FullName == "System.Void" && method.IsFamily)
                 writer.Append("~" + method.DeclaringType.CSharpBaseName);
-                
+
             // Regular method or operator overload
             else if (method.Name != "op_Implicit" && method.Name != "op_Explicit")
                 writer.Append($"{method.ReturnParameter.GetReturnParameterString(scope)} {method.CSharpName}{method.GetTypeParametersString(scope)}");
