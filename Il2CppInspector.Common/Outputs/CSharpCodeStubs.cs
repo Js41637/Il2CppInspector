@@ -61,11 +61,13 @@ namespace Il2CppInspector.Outputs
 
         public void WriteFilesByNamespace<TKey>(string outPath, Func<TypeInfo, TKey> orderBy, bool flattenHierarchy) {
             usedAssemblyAttributes.Clear();
-            Parallel.ForEach(model.Assemblies.SelectMany(x => x.DefinedTypes).GroupBy(t => t.Namespace), ns => {
+            var files = model.Assemblies.SelectMany(x => x.DefinedTypes).GroupBy(t => t.Namespace);
+            foreach (var ns in files) {
                 var relPath = !string.IsNullOrEmpty(ns.Key) ? ns.Key : "global";
+                Console.WriteLine("Writing namespace " + relPath + "...");
                 writeFile(Path.Combine(outPath, (flattenHierarchy ? relPath : Path.Combine(relPath.Split('.'))) + ".cs"),
                     ns.OrderBy(orderBy));
-            });
+            }
         }
 
         public void WriteFilesByAssembly<TKey>(string outPath, Func<TypeInfo, TKey> orderBy, bool separateAttributes) {
@@ -202,43 +204,37 @@ namespace Il2CppInspector.Outputs
             if (outputAssemblyAttributes)
                 nsRefs.UnionWith(assemblies.SelectMany(a => a.CustomAttributes).Select(a => a.AttributeType.Namespace));
 
-            var results = new ConcurrentBag<Dictionary<TypeInfo, StringBuilder>>();
+            var results = new Dictionary<TypeInfo, StringBuilder>();
 
-            // Generate each type
-            Parallel.ForEach(types, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(Environment.ProcessorCount / 2, 1) },
-                () => new Dictionary<TypeInfo, StringBuilder>(),
-                (type, _, dict) => {
-                    // Skip namespace and any children if requested
-                    if (ExcludedNamespaces?.Any(x => x == type.Namespace || type.Namespace.StartsWith(x + ".")) ?? false)
-                        return dict;
+            foreach (var type in types) {
+                // Skip namespace and any children if requested
+                if (ExcludedNamespaces?.Any(x => x == type.Namespace || type.Namespace.StartsWith(x + ".")) ?? false)
+                    continue;
 
-                    // Don't output global::Locale if desired
-                    if (MustCompile
-                        && type.Name == "Locale" && type.Namespace == string.Empty
-                        && type.BaseType.FullName == "System.Object"
-                        && type.IsClass && type.IsSealed && type.IsNotPublic && !type.ContainsGenericParameters
-                        && type.DeclaredMembers.Count == type.DeclaredMethods.Count
-                        && type.GetMethods("GetText").Length == type.DeclaredMethods.Count)
-                        return dict;
+                // Don't output global::Locale if desired
+                if (MustCompile
+                    && type.Name == "Locale" && type.Namespace == string.Empty
+                    && type.BaseType.FullName == "System.Object"
+                    && type.IsClass && type.IsSealed && type.IsNotPublic && !type.ContainsGenericParameters
+                    && type.DeclaredMembers.Count == type.DeclaredMethods.Count
+                    && type.GetMethods("GetText").Length == type.DeclaredMethods.Count)
+                    continue;
 
-                    // Assembly.DefinedTypes returns nested types in the assembly by design - ignore them
-                    if (type.IsNested)
-                        return dict;
+                // Assembly.DefinedTypes returns nested types in the assembly by design - ignore them
+                if (type.IsNested)
+                    continue;
 
-                    // Get code
-                    var code = generateType(type, nsRefs);
-                    if (code.Length > 0)
-                        dict.Add(type, code);
-                    return dict;
-            },
-            dict => results.Add(dict));
+                // Get code
+                var typeCode = generateType(type, nsRefs);
+                if (typeCode.Length > 0)
+                    results.Add(type, typeCode);
+            }
 
-            // Flatten
-            var sortedResults = results.SelectMany(d => d).ToDictionary(i => i.Key, i => i.Value);
 
             // Process in order according to original sorted type list
+            Console.WriteLine(" - generating types...");
             foreach (var type in types) {
-                if (!sortedResults.TryGetValue(type, out var text))
+                if (!results.TryGetValue(type, out var text))
                     continue;
 
                 // Determine if we need to change namespace (after we have established the code block is not empty)
@@ -308,34 +304,27 @@ namespace Il2CppInspector.Outputs
 
             outFile = Path.Combine(dir, leafname);
 
-            // Create output file
-            bool fileWritten = false;
-            do {
-                try {
-                    using StreamWriter writer = new StreamWriter(new FileStream(outFile, FileMode.Create), Encoding.UTF8);
+            try {
+                Console.WriteLine(" - Writing to file " + outFile + "...");
+                using StreamWriter writer = new StreamWriter(new FileStream(outFile, FileMode.Create), Encoding.UTF8);
 
-                    // Output assembly information and attributes
-                    writer.Write(generateAssemblyInfo(assemblies, nsRefs, outputAssemblyAttributes) + "\n\n");
+                // Output assembly information and attributes
+                writer.Write(generateAssemblyInfo(assemblies, nsRefs, outputAssemblyAttributes) + "\n\n");
 
-                    // Output using directives
-                    writer.Write(string.Concat(usings.Select(n => $"using {n};\n")));
-                    if (nsRefs.Any())
-                        writer.Write("\n");
+                // Output using directives
+                writer.Write(string.Concat(usings.Select(n => $"using {n};\n")));
+                if (nsRefs.Any())
+                    writer.Write("\n");
 
-                    // Output type definitions
-                    writer.Write(code);
-
-                    fileWritten = true;
-                }
-                catch (IOException ex) {
-                    // If we get "file is in use by another process", we are probably writing a duplicate class in another thread
-                    // Wait a bit and try again
-                    if ((uint) ex.HResult != 0x80070020)
-                        throw;
-
-                    System.Threading.Thread.Sleep(100);
-                }
-            } while (!fileWritten);
+                // Output type definitions
+                writer.Write(code);
+            }
+            catch (IOException ex) {
+                // If we get "file is in use by another process", we are probably writing a duplicate class in another thread
+                // Wait a bit and try again
+                if ((uint) ex.HResult != 0x80070020)
+                    throw;
+            }
 
             return true;
         }

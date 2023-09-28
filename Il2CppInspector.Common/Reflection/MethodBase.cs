@@ -117,7 +117,7 @@ namespace Il2CppInspector.Reflection
         // Initialize a method from a method definition (MethodDef)
         protected MethodBase(Il2CppInspector pkg, int methodIndex, TypeInfo declaringType) : base(declaringType) {
             Definition = pkg.Methods[methodIndex];
-            MetadataToken = (int) Definition.token;
+            MetadataToken = Definition.token;
             Index = methodIndex;
             Name = pkg.Strings[Definition.nameIndex];
 

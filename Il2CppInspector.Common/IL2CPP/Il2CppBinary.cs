@@ -172,6 +172,9 @@ namespace Il2CppInspector
             if (!((FindMetadataFromSymbols() ?? FindMetadataFromCode() ?? FindMetadataFromData()) is (ulong code, ulong meta)))
                 return false;
 
+            /*ulong code = 0x0000000183CFB8C0;
+            ulong meta = 0x00000001842A8240;*/
+
             TryPrepareMetadata(code, meta);
             return true;
         }

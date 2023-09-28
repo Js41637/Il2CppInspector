@@ -7,6 +7,7 @@
 using NoisyCowStudios.Bin2Object;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -24,7 +25,9 @@ namespace Il2CppInspector
         public Dictionary<ulong, ulong> FunctionAddresses { get; }
 
         // Attribute indexes (>=24.1) arranged by customAttributeStart and token
-        public Dictionary<int, Dictionary<uint, int>> AttributeIndicesByToken { get; }
+        public Dictionary<int, Dictionary<uint, int>> AttributeIndicesByToken { get; } = new Dictionary<int, Dictionary<uint, int>>();
+
+        public Dictionary<Il2CppImageDefinition, Dictionary<uint, int>> AttributeTypeRangesDict { get; } = new Dictionary<Il2CppImageDefinition, Dictionary<uint, int>>();
 
         // Merged list of all metadata usage references
         public List<MetadataUsage> MetadataUsages { get; }
@@ -46,6 +49,7 @@ namespace Il2CppInspector
         public Il2CppGenericParameter[] GenericParameters => Metadata.GenericParameters;
         public int[] GenericConstraintIndices => Metadata.GenericConstraintIndices;
         public Il2CppCustomAttributeTypeRange[] AttributeTypeRanges => Metadata.AttributeTypeRanges;
+        public Il2CppCustomAttributeDataRange[] AttributeDataRanges => Metadata.AttributeDataRanges;
         public Il2CppInterfaceOffsetPair[] InterfaceOffsets => Metadata.InterfaceOffsets;
         public int[] InterfaceUsageIndices => Metadata.InterfaceUsageIndices;
         public int[] NestedTypeIndices => Metadata.NestedTypeIndices;
@@ -317,19 +321,24 @@ namespace Il2CppInspector
             // The last method end pointer will be incorrect but there is no way of calculating it
             FunctionAddresses.Add(sortedFunctionPointers[^1], sortedFunctionPointers[^1]);
 
-            // Organize custom attribute indices
-            if (Version >= 24.1 && Version < 29) {
-                AttributeIndicesByToken = new Dictionary<int, Dictionary<uint, int>>();
+
+            if (Version > 24) {
+                AttributeTypeRangesDict = new Dictionary<Il2CppImageDefinition, Dictionary<uint, int>>();
                 foreach (var image in Images) {
-                    var attsByToken = new Dictionary<uint, int>();
-                    for (int i = 0; i < image.customAttributeCount; i++) {
-                        var index = image.customAttributeStart + i;
-                        var token = AttributeTypeRanges[index].token;
-                        attsByToken.Add(token, index);
+                    var dic = new Dictionary<uint, int>();
+                    AttributeTypeRangesDict[image] = dic;
+                    var end = image.customAttributeStart + image.customAttributeCount;
+                    for (int i = image.customAttributeStart; i < end; i++) {
+                        if (Version >= 29) {
+                            dic.Add(AttributeDataRanges[i].token, i);
+                        }
+                        else {
+                            dic.Add(AttributeTypeRanges[i].token, i);
+                        }
                     }
 
                     if (image.customAttributeCount > 0)
-                        AttributeIndicesByToken.Add(image.customAttributeStart, attsByToken);
+                        AttributeIndicesByToken.Add(image.customAttributeStart, dic);
                 }
             }
 

@@ -42,7 +42,7 @@ namespace Il2CppInspector.Reflection
         public MethodBase DeclaringMethod { get; }
 
         // Metadata token of the parameter
-        public int MetadataToken { get; }
+        public uint MetadataToken { get; }
 
         // Name of parameter
         public string Name { get; }
@@ -68,7 +68,7 @@ namespace Il2CppInspector.Reflection
             }
 
             Definition = pkg.Params[Index];
-            MetadataToken = (int) Definition.token;
+            MetadataToken = Definition.token;
             Name = pkg.Strings[Definition.nameIndex];
             rootDefinition = this;
 

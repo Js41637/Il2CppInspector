@@ -26,7 +26,7 @@ namespace Il2CppInspector.Reflection {
         public abstract MemberTypes MemberType { get; }
 
         // Metadata token of the member
-        public int MetadataToken { get; protected set; }
+        public uint MetadataToken { get; protected set; }
 
         // Name of the member
         public virtual string Name { get; set; }

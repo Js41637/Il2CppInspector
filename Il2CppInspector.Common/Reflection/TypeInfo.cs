@@ -566,6 +566,18 @@ namespace Il2CppInspector.Reflection
             if (minimallyScopedName.StartsWith("."))
                 minimallyScopedName = "global::" + minimallyScopedName.Substring(1);
 
+            // check to see if the minimally scoped name starts with a namespace that is already in scope and if it is, remove it
+            /*
+            var namespaces = scope.Namespaces;
+            if (namespaces != null) {
+                foreach (var ns in namespaces) {
+                    if (minimallyScopedName.StartsWith(ns + "."))
+                        minimallyScopedName = minimallyScopedName.Substring(ns.Length + 1);
+                }
+            }
+            */
+
+
             return minimallyScopedName;
         }
 
@@ -739,7 +751,7 @@ namespace Il2CppInspector.Reflection
             var pkg = Assembly.Model.Package;
 
             Definition = pkg.TypeDefinitions[typeIndex];
-            MetadataToken = (int) Definition.token;
+            MetadataToken = Definition.token;
             Index = typeIndex;
             Namespace = Regex.Replace(pkg.Strings[Definition.namespaceIndex], @"[^A-Za-z0-9_\-\.<>{}]", "");
             Name = pkg.Strings[Definition.nameIndex];
