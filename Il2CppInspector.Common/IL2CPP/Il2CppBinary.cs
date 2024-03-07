@@ -169,11 +169,11 @@ namespace Il2CppInspector
             Image.Version = metadataVersion;
 
             StatusUpdate("Searching for binary metadata");
-            if (!((FindMetadataFromSymbols() ?? FindMetadataFromCode() ?? FindMetadataFromData()) is (ulong code, ulong meta)))
-                return false;
+            /*if (!((FindMetadataFromSymbols() ?? FindMetadataFromCode() ?? FindMetadataFromData()) is (ulong code, ulong meta)))
+                return false;*/
 
-            /*ulong code = 0x0000000183CFB8C0;
-            ulong meta = 0x00000001842A8240;*/
+            ulong code = 0x00000001849348d0;
+            ulong meta = 0x00000001851b3870;
 
             TryPrepareMetadata(code, meta);
             return true;
