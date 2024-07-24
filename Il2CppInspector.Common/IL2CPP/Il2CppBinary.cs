@@ -168,12 +168,13 @@ namespace Il2CppInspector
         public bool FindRegistrationStructs(double metadataVersion) {
             Image.Version = metadataVersion;
 
-            StatusUpdate("Searching for binary metadata");
-            /*if (!((FindMetadataFromSymbols() ?? FindMetadataFromCode() ?? FindMetadataFromData()) is (ulong code, ulong meta)))
-                return false;*/
+            Console.Write("Input CodeRegistration: ");
+            var code = Convert.ToUInt64(Console.ReadLine(), 16);
+            Console.Write("Input MetadataRegistration: ");
+            var meta = Convert.ToUInt64(Console.ReadLine(), 16);
 
-            ulong code = 0x00000001849348d0;
-            ulong meta = 0x00000001851b3870;
+            /*ulong code = 0x00000001849348d0;
+            ulong meta = 0x00000001851b3870;*/
 
             TryPrepareMetadata(code, meta);
             return true;
